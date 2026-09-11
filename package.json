@@ -1,0 +1,27 @@
+{
+  "name": "print-to-drive",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Chrome extension that intercepts printing and saves the page as a PDF straight to a Google Drive folder.",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "zip": "npm run build && cd dist && zip -r ../print-to-drive.zip .",
+    "smoke": "node test/smoke.mjs"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.0.0"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}
