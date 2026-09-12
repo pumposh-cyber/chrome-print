@@ -2,6 +2,15 @@ import { useCallback, useEffect, useState } from 'react';
 import { send, type AuthState } from '../shared/messages';
 import type { Settings } from '../shared/types';
 
+/** Shown before the worker answers, and whenever sign-in state is lost. */
+const SIGNED_OUT: AuthState = {
+  signedIn: false,
+  email: null,
+  canBrowseDrive: false,
+  backend: 'chrome-identity',
+  hasClientId: false,
+};
+
 interface SettingsApi {
   settings: Settings | null;
   update: (patch: Partial<Settings>) => Promise<void>;
@@ -48,7 +57,7 @@ export function useAuth(): AuthApi {
   const refresh = useCallback(async () => {
     const response = await send({ type: 'get-auth-state' });
     if (response.ok) setAuth(response.data);
-    else setAuth({ signedIn: false, email: null, canBrowseDrive: false });
+    else setAuth(SIGNED_OUT);
   }, []);
 
   useEffect(() => {
@@ -67,9 +76,9 @@ export function useAuth(): AuthApi {
   const signOut = useCallback(async () => {
     setBusy(true);
     await send({ type: 'sign-out' });
-    setAuth({ signedIn: false, email: null, canBrowseDrive: false });
+    await refresh();
     setBusy(false);
-  }, []);
+  }, [refresh]);
 
   return { auth, busy, error, signIn, signOut, refresh };
 }

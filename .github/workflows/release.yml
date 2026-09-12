@@ -1,0 +1,35 @@
+name: Release
+
+# Tagging v1.2.3 publishes a ready-to-install zip, so users never need Node.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Package
+        run: cd dist && zip -r ../print-to-drive-${{ github.ref_name }}.zip .
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: print-to-drive-*.zip
+          generate_release_notes: true
+          body: |
+            Download the zip below, unzip it, then load the folder at
+            `chrome://extensions` with **Load unpacked** (Developer mode on).
+
+            No Node, no build step. The extension ID is the same on every
+            install, so a single Google OAuth client covers everyone.

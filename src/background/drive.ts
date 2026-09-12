@@ -1,27 +1,23 @@
 import type { AuthState } from '../shared/messages';
+import { getSettings } from '../shared/settings';
 import type { Bytes, DriveFolder } from '../shared/types';
+import {
+  type AuthConfig,
+  BASE_SCOPES,
+  BROWSE_SCOPES,
+  DRIVE_READONLY_SCOPE,
+  getAccessToken,
+  clearTokens,
+  invalidateToken,
+  resolveBackend,
+} from './auth';
 
 const FILES_API = 'https://www.googleapis.com/drive/v3/files';
 const UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3/files';
 const USERINFO_API = 'https://www.googleapis.com/oauth2/v3/userinfo';
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 
-/**
- * drive.file only grants access to files and folders this extension created or
- * the user explicitly opened with it. It is a non-sensitive scope, so a
- * self-installed build works without going through OAuth verification.
- */
-export const BASE_SCOPES = [
-  'https://www.googleapis.com/auth/drive.file',
-  'https://www.googleapis.com/auth/userinfo.email',
-];
-
-/**
- * Optional, and deliberately opt-in: listing folders the extension did not
- * create needs a restricted scope, which Google only grants an unverified app
- * for accounts listed as test users on its OAuth consent screen.
- */
-export const BROWSE_SCOPES = [...BASE_SCOPES, 'https://www.googleapis.com/auth/drive.readonly'];
+export { BASE_SCOPES, BROWSE_SCOPES };
 
 export class DriveError extends Error {
   constructor(
@@ -33,47 +29,56 @@ export class DriveError extends Error {
   }
 }
 
-/** Cached only for the lifetime of the service worker; Chrome owns the real cache. */
-let cachedToken: string | null = null;
+/** The auth settings the user configured, read fresh so edits take effect at once. */
+export async function authConfig(): Promise<AuthConfig> {
+  const { oauthClientId } = await getSettings();
+  return { customClientId: oauthClientId };
+}
 
-export async function getToken(interactive: boolean, scopes?: string[]): Promise<string> {
-  const result = await chrome.identity.getAuthToken({ interactive, ...(scopes ? { scopes } : {}) });
-  // Chrome returns a bare string on older builds and an object on newer ones.
-  const token = typeof result === 'string' ? result : result?.token;
-  if (!token) throw new DriveError('Google did not return an access token.');
-  cachedToken = token;
-  return token;
+export async function signIn(broadScope: boolean): Promise<void> {
+  await getAccessToken({
+    config: await authConfig(),
+    scopes: broadScope ? BROWSE_SCOPES : BASE_SCOPES,
+    interactive: true,
+  });
 }
 
 export async function signOut(): Promise<void> {
-  const token = cachedToken ?? (await tryGetToken(false));
-  if (token) {
-    // Revoking as well as clearing means the next sign-in re-shows the consent
-    // screen, which is what a user expects from "disconnect".
-    await fetch(`https://accounts.google.com/o/oauth2/revoke?token=${token}`).catch(() => undefined);
-    await chrome.identity.removeCachedAuthToken({ token }).catch(() => undefined);
-  }
-  await chrome.identity.clearAllCachedAuthTokens?.().catch(() => undefined);
-  cachedToken = null;
-}
-
-async function tryGetToken(interactive: boolean, scopes?: string[]): Promise<string | null> {
-  try {
-    return await getToken(interactive, scopes);
-  } catch {
-    return null;
-  }
+  await clearTokens(await authConfig());
 }
 
 export async function getAuthState(): Promise<AuthState> {
-  const token = await tryGetToken(false);
-  if (!token) return { signedIn: false, email: null, canBrowseDrive: false };
+  const config = await authConfig();
+  const { backend, clientId } = resolveBackend(config);
+  const base: AuthState = {
+    signedIn: false,
+    email: null,
+    canBrowseDrive: false,
+    backend,
+    hasClientId: clientId !== null,
+  };
+
+  if (!clientId) return base;
+
+  const token = await getAccessToken({ config, scopes: BASE_SCOPES, interactive: false }).catch(
+    () => null,
+  );
+  if (!token) return base;
 
   const [email, canBrowseDrive] = await Promise.all([
     fetchEmail(token),
-    tryGetToken(false, BROWSE_SCOPES).then((t) => t !== null),
+    hasScope(config, DRIVE_READONLY_SCOPE),
   ]);
-  return { signedIn: true, email, canBrowseDrive };
+  return { ...base, signedIn: true, email, canBrowseDrive };
+}
+
+async function hasScope(config: AuthConfig, scope: string): Promise<boolean> {
+  const token = await getAccessToken({
+    config,
+    scopes: [...BASE_SCOPES, scope],
+    interactive: false,
+  }).catch(() => null);
+  return token !== null;
 }
 
 async function fetchEmail(token: string): Promise<string | null> {
@@ -89,20 +94,20 @@ async function fetchEmail(token: string): Promise<string | null> {
 
 /**
  * Call the Drive API with a valid token, refreshing once if Google rejects the
- * cached one (tokens expire after an hour and Chrome caches them eagerly).
+ * cached one (tokens last about an hour and are cached eagerly).
  */
 async function authedFetch(
   url: string,
   init: RequestInit,
-  scopes?: string[],
+  scopes: string[] = BASE_SCOPES,
 ): Promise<globalThis.Response> {
-  let token = await getToken(false, scopes);
+  const config = await authConfig();
+  let token = await getAccessToken({ config, scopes, interactive: false });
   let response = await fetch(url, withAuth(init, token));
 
   if (response.status === 401) {
-    await chrome.identity.removeCachedAuthToken({ token }).catch(() => undefined);
-    cachedToken = null;
-    token = await getToken(false, scopes);
+    await invalidateToken(token, config);
+    token = await getAccessToken({ config, scopes, interactive: false });
     response = await fetch(url, withAuth(init, token));
   }
   return response;
@@ -122,7 +127,10 @@ async function readError(response: globalThis.Response, fallback: string): Promi
   } catch {
     detail = await response.text().catch(() => '');
   }
-  return new DriveError(detail ? `${fallback}: ${detail}` : `${fallback} (HTTP ${response.status})`, response.status);
+  return new DriveError(
+    detail ? `${fallback}: ${detail}` : `${fallback} (HTTP ${response.status})`,
+    response.status,
+  );
 }
 
 export async function listFolders(parentId?: string, scopes?: string[]): Promise<DriveFolder[]> {
