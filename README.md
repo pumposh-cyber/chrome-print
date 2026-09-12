@@ -15,82 +15,58 @@ exposes.
 - **No dialog.** `auto` mode saves without a click. `ask` mode shows a small in-page prompt.
 - **Narrow permissions.** It uses the `drive.file` OAuth scope, which grants access only to files
   the extension itself creates. It cannot read the rest of your Drive.
+- **Setup is guided.** The options page walks you through Google's side and tells you exactly
+  what is wrong when something is.
 
 ---
 
-## 1. Build it
+## Install
 
-Requires Node 18 or newer.
+**Either** download the zip from [Releases](../../releases), unzip it somewhere permanent, then at
+`chrome://extensions` turn on **Developer mode** and click **Load unpacked** on that folder.
+
+**Or** build it yourself (Node 18+):
 
 ```bash
 npm install
-npm run build      # writes dist/
-npm run dev        # same, but rebuilds on change
+npm run build     # writes dist/, which is the unpacked extension
 ```
 
-`dist/` is the unpacked extension.
+Then **Load unpacked** on `dist/`.
 
-## 2. Load it in Chrome and note the extension ID
+> The extension ID is **pinned** by a `key` in the manifest, so it is the same on every machine no
+> matter where the folder lives. That is what lets one Google OAuth client cover every install.
 
-1. Open `chrome://extensions`.
-2. Turn on **Developer mode** (top right).
-3. Click **Load unpacked** and select the `dist/` folder.
-4. Copy the **ID** shown on the extension's card — a 32-character string like
-   `abcdefghijklmnopabcdefghijklmnop`.
+## Connect Google Drive
 
-The ID is derived from the folder path, so it stays the same as long as you do not move the
-project.
+Open the extension's options page (right-click the toolbar icon → **Options**). The **Setup** panel
+at the top is the whole process:
 
-## 3. Create a Google OAuth client
+1. It shows your **Redirect URI** with a copy button, and deep-links to the three Google Cloud
+   Console pages you need.
+2. In the console: create an OAuth client of type **Web application**, paste the Redirect URI into
+   its *Authorized redirect URIs*, enable the **Google Drive API** in the same project, and add your
+   own Google account under **Test users** on the consent screen.
+3. Paste the client ID back into the options page and press **Connect Google Drive**.
 
-This is the part with no shortcut: Google requires the extension's own OAuth client, tied to the ID
-from the previous step.
+No file editing, no rebuild, no extension reload. If anything is off, the panel's checklist names
+the specific problem and links straight to the page that fixes it.
 
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/) and create a project (or
-   pick an existing one).
-2. **APIs & Services → Library →** enable the **Google Drive API**.
-3. **APIs & Services → OAuth consent screen:**
-   - User type **External** is fine for personal use.
-   - Fill in the app name and your email.
-   - Under **Test users**, add the Google account you will sign in with. While the app is in
-     *Testing* status only test users can authorize it, which is all you need for yourself. You do
-     **not** need to submit for verification to use `drive.file`.
-4. **APIs & Services → Credentials → Create credentials → OAuth client ID:**
-   - Application type: **Chrome Extension**.
-   - Item ID: the extension ID you copied.
-5. Copy the generated client ID.
+`drive.file` is a non-sensitive scope, so **no Google verification review is required**. You will
+see an "unverified app" notice while the consent screen is in Testing — that is expected. You can
+also **Publish** the app in the console to remove it, still without review.
 
-## 4. Wire the client ID in and reload
+### Shipping it to other people
 
-Edit `public/manifest.json` and replace the placeholder:
+If you are distributing this, do the console step once and compile the client ID in, so nobody
+downstream touches Google Cloud at all:
 
-```json
-"oauth2": {
-  "client_id": "123456789-abcdefg.apps.googleusercontent.com",
-  "scopes": [
-    "https://www.googleapis.com/auth/drive.file",
-    "https://www.googleapis.com/auth/userinfo.email"
-  ]
-}
-```
+1. Create an OAuth client of type **Chrome Extension**, with the **Item ID** set to the pinned
+   extension ID (the Setup panel shows it, and `node scripts/make-key.mjs` prints it).
+2. Put it in `public/manifest.json` under `oauth2.client_id`, and `npm run build`.
 
-Then rebuild and reload:
-
-```bash
-npm run build
-```
-
-Click the reload arrow on the extension card in `chrome://extensions`.
-
-> Edit `public/manifest.json`, not `dist/manifest.json` — the build overwrites `dist/`.
-
-## 5. Connect Drive
-
-Open the extension's options page (right-click the toolbar icon → **Options**), click **Connect
-Google Drive**, and pick a destination folder. If you do not pick one, the first save creates a
-folder called **Printed Pages** in your Drive root and remembers it.
-
-That's it. Press <kbd>Ctrl</kbd>+<kbd>P</kbd> on any page.
+Users then just install and click **Connect**. Anyone who prefers their own Google project can
+still override it from the options page — the pasted client ID always wins.
 
 ---
 
@@ -123,11 +99,10 @@ print the normal way.
 
 ### Picking a folder you already had
 
-With the `drive.file` scope the extension can only see folders it created, so the folder dropdown
-starts empty and you create one from the options page. If you want to target a folder that already
-exists in your Drive, use **allow browsing my Drive** on the options page. That requests
-`drive.readonly`, which is a *restricted* scope: Google will only grant it to accounts listed as
-test users on your consent screen unless the app goes through verification.
+With `drive.file` the extension only sees folders it created, so the folder list starts empty and
+you create one from the options page. To target a folder you already had, use **allow browsing my
+Drive**. That requests `drive.readonly`, a *restricted* scope that Google grants an unverified app
+only for accounts on its test-user list.
 
 ---
 
@@ -137,27 +112,31 @@ These are Chrome's constraints, not implementation gaps:
 
 - **A yellow banner appears while the PDF renders.** Rendering uses the debugger API, and Chrome
   always announces that. It disappears as soon as the PDF is captured. Launching Chrome with
-  `--silent-debugger-extension-api` suppresses it if the banner bothers you.
+  `--silent-debugger-extension-api` suppresses it.
 - **The Chrome menu's own Print item cannot be intercepted.** No extension API can hook browser
   chrome. Use <kbd>Ctrl</kbd>+<kbd>P</kbd>, the toolbar button, or the context menu.
-- **DevTools and this extension cannot both be attached to a tab.** If DevTools is open on the page
-  you are printing, the save fails with a clear message — close DevTools and retry.
+- **DevTools and this extension cannot both be attached to a tab.** Close DevTools on the page you
+  are printing.
 - **`chrome://` pages, the Chrome Web Store, and `file://` URLs are off-limits** to extension
   content scripts and the debugger.
-- **`chrome.identity` requires being signed into Chrome** with a profile, and is a Chrome-specific
-  API. Chromium forks may not support it.
 
 ## Troubleshooting
 
+Run **Re-check** in the Setup panel first — it diagnoses most of this in place and links to the fix.
+
 | Symptom | Cause and fix |
 | --- | --- |
-| `OAuth2 request failed: Service responded with error: 'bad client id'` | The client ID in the manifest does not match the extension ID. Re-check step 3, then rebuild and reload. |
-| `Authorization page could not be loaded` | The Drive API is not enabled on the project, or the consent screen is incomplete. |
-| `access_denied` on the consent screen | Your account is not on the **Test users** list for the consent screen. |
-| Nothing happens on <kbd>Ctrl</kbd>+<kbd>P</kbd> | The content script was injected before the extension was reloaded. Reload the page. |
+| `bad client id` | The client ID does not match the OAuth client. Paste it again in Setup, or check the Item ID on a Chrome-Extension-type client. |
+| `access_denied` | Your account is not under **Test users** on the consent screen. |
+| `Authorization page could not be loaded` | The Drive API is not enabled in that project. |
+| `redirect_uri_mismatch` | The Redirect URI in Setup is not listed on the Web-application client. |
+| **Connect hangs, then times out** | Stale OAuth state. Fully quit and reopen Chrome, then retry. |
+| Nothing happens on <kbd>Ctrl</kbd>+<kbd>P</kbd> | Reload the page; content scripts only inject on load. |
 | `Another debugger is attached to this tab` | DevTools is open on that tab. Close it. |
-| The saved PDF looks like the screen, not a printout | The site's print stylesheet is doing that. Try turning off **Print background graphics** or turning on **Respect the page's own @page size**. |
-| Uploads fail after an hour of idling | Expected token expiry; the extension refreshes and retries once automatically. If it persists, disconnect and reconnect in options. |
+| PDF looks like the screen, not a printout | The site's print CSS. Try turning off **Print background graphics**, or on **Respect the page's own @page size**. |
+
+Google warns that console changes can take **5 minutes to a few hours** to propagate. If everything
+looks right but still fails, wait before hunting for a mistake.
 
 ---
 
@@ -174,16 +153,30 @@ content-isolated.js  ISOLATED world. Owns the Ctrl+P handler, relays the request
         │            to the worker, and draws the status card.
         ▼
 service-worker.js  1. chrome.debugger.attach → Page.printToPDF → IO.read (streamed)
-                   2. chrome.identity.getAuthToken  (drive.file)
+                   2. auth.ts → an access token
                    3. POST to the Drive upload endpoint
                    4. status card + desktop notification + history
 ```
 
-The two-world split is what makes `window.print()` interception possible: only code running in the
-page's own JavaScript world can replace `window.print`, and only code in the isolated world can
-call `chrome.*`. They talk over custom DOM events.
+The two-world split is what makes `window.print()` interception possible: only code in the page's
+own JavaScript world can replace `window.print`, and only code in the isolated world can call
+`chrome.*`. They talk over custom DOM events.
 
 Uploads under 5 MB go out as a single multipart request; larger ones use a resumable session.
+
+### Two auth backends
+
+`src/background/auth.ts` picks one at runtime:
+
+| Backend | When | Client type needed |
+| --- | --- | --- |
+| `chrome-identity` | A client ID is in the manifest and `getAuthToken` exists | **Chrome Extension**, keyed by Item ID |
+| `web-auth-flow` | A client ID was entered in options, or the browser lacks `getAuthToken` | **Web application**, keyed by Redirect URI |
+
+`chrome-identity` lets Chrome manage token refresh. `web-auth-flow` drives the OAuth redirect
+through `launchWebAuthFlow`, which accepts a client ID supplied at runtime and works on Chromium
+browsers that do not implement `getAuthToken`. Every sign-in is bounded by a timeout, so a stalled
+auth window surfaces an error instead of spinning forever.
 
 ### Project layout
 
@@ -191,24 +184,24 @@ Uploads under 5 MB go out as a single multipart request; larger ones use a resum
 src/
   background/
     service-worker.ts  message routing and the save pipeline
+    auth.ts            token acquisition, both backends, caching, timeouts
+    drive.ts           folder CRUD and multipart + resumable upload
+    diagnostics.ts     the checks behind the Setup panel
     pdf.ts             chrome.debugger → Page.printToPDF, streamed back in chunks
-    drive.ts           OAuth tokens, folder CRUD, multipart + resumable upload
     history.ts         the "recently saved" list
   content/
     main-world.ts      the window.print() override
     isolated.ts        shortcut handling and the bridge to the worker
     toast.ts           the in-page status card (shadow DOM)
-  shared/
-    types.ts           settings schema and defaults
-    messages.ts        typed message protocol between every context
-    filename.ts        filename template expansion and sanitizing
-    matcher.ts         per-site rule resolution
-    settings.ts        chrome.storage.sync wrapper
+  shared/              settings schema, typed messages, filename and host matching
   ui/
     options.tsx        settings page (React)
-    popup.tsx          toolbar popup (React)
+    setup.tsx          the guided Setup panel and diagnostics
+    popup.tsx          toolbar popup
 public/                manifest, HTML shells, generated icons
-scripts/make_icons.py  regenerates the PNG icons from primitives
+scripts/
+  make-key.mjs         generates/prints the key that pins the extension ID
+  make_icons.py        regenerates the PNG icons from primitives
 test/                  vitest unit tests, plus smoke.mjs (real-browser end-to-end)
 ```
 
@@ -219,11 +212,11 @@ npm run dev        # esbuild in watch mode
 npm run typecheck  # tsc --noEmit
 npm test           # vitest, for the pure logic
 npm run smoke      # loads dist/ into a real Chromium and exercises the print path
-npm run zip        # build and package for upload
+npm run zip        # build and package for distribution
 ```
 
-`npm run smoke` needs Playwright, which is deliberately not a dependency because installing it
-downloads a browser:
+`npm run smoke` needs Playwright, deliberately not a dependency because installing it downloads a
+browser:
 
 ```bash
 npm install --no-save playwright
@@ -231,16 +224,22 @@ npx playwright install chromium
 npm run build && npm run smoke
 ```
 
-It boots Chromium with the extension loaded and asserts that `window.print` is replaced, that
-Ctrl+P is captured, that settings reach the content script, that the status card appears, and that
-the options page and popup both render without errors.
+Tagging `v1.2.3` builds, tests, and attaches an installable zip to a GitHub release.
 
-The icons are generated, not hand-drawn — run `python3 scripts/make_icons.py` after editing the
-shapes in that script.
+### The pinned extension ID
+
+`public/manifest.json` carries a `key`, the public half of an RSA keypair, from which Chrome derives
+a fixed extension ID instead of hashing the install path. `node scripts/make-key.mjs` prints the
+current ID and redirect URI; `--write` regenerates and rewrites the manifest.
+
+The private half lands in `.extension-key.pem` (gitignored) and is **only** needed to sign a `.crx`.
+Losing it costs nothing for unpacked or zip distribution. Changing the key changes the extension ID,
+which invalidates any OAuth client bound to the old one.
 
 ## Privacy
 
 Everything runs locally in your browser. The PDF goes from Chrome's renderer straight to
 `googleapis.com` with your own OAuth token; there is no server in between, and no analytics. The
 extension holds `drive.file`, so it can only touch files it created. Settings live in
-`chrome.storage.sync`; the list of recently saved files lives in `chrome.storage.local`.
+`chrome.storage.sync`, recent saves in `chrome.storage.local`, and access tokens in
+`chrome.storage.session`, which never reaches disk.

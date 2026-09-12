@@ -1,3 +1,4 @@
+import type { Diagnostics } from '../background/diagnostics';
 import type { DriveFolder, HistoryEntry, Settings } from './types';
 
 export * from './events';
@@ -16,6 +17,7 @@ export type RequestMessage =
   | { type: 'list-folders'; parentId?: string }
   | { type: 'create-folder'; name: string; parentId?: string }
   | { type: 'open-options' }
+  | { type: 'run-diagnostics' }
   | { type: 'get-history' }
   | { type: 'clear-history' };
 
@@ -24,6 +26,10 @@ export interface AuthState {
   email: string | null;
   /** True when the user granted the wider scope that can browse existing folders. */
   canBrowseDrive: boolean;
+  /** Which sign-in mechanism is in use: 'chrome-identity' or 'web-auth-flow'. */
+  backend: string;
+  /** False when no client ID is configured anywhere, so sign-in cannot start. */
+  hasClientId: boolean;
 }
 
 export interface SaveResult {
@@ -56,6 +62,7 @@ export interface ResponseMap {
   'list-folders': DriveFolder[];
   'create-folder': DriveFolder;
   'open-options': null;
+  'run-diagnostics': Diagnostics;
   'get-history': HistoryEntry[];
   'clear-history': null;
 }

@@ -14,11 +14,13 @@ import {
   createFolder,
   getAuthState,
   getFolder,
-  getToken,
   listFolders,
+  signIn,
   signOut,
   uploadPdf,
 } from './drive';
+import { runDiagnostics } from './diagnostics';
+import { AuthError } from './auth';
 import { addHistoryEntry, clearHistory, getHistory } from './history';
 import { PdfError, renderTabToPdf } from './pdf';
 
@@ -107,7 +109,7 @@ async function handleMessage(
       return settings;
     }
     case 'sign-in':
-      await getToken(true, message.broadScope ? BROWSE_SCOPES : BASE_SCOPES);
+      await signIn(message.broadScope === true);
       return getAuthState();
     case 'sign-out':
       await signOut();
@@ -123,6 +125,8 @@ async function handleMessage(
     case 'open-options':
       await chrome.runtime.openOptionsPage();
       return null;
+    case 'run-diagnostics':
+      return runDiagnostics();
     case 'get-history':
       return getHistory();
     case 'clear-history':
@@ -137,6 +141,7 @@ async function handleMessage(
 
 function toErrorResponse(error: unknown): Response<never> {
   if (error instanceof PdfError) return { ok: false, error: error.message, code: error.code };
+  if (error instanceof AuthError) return { ok: false, error: error.message };
   return { ok: false, error: error instanceof Error ? error.message : String(error) };
 }
 

@@ -296,3 +296,149 @@ td.actions {
   cursor: pointer;
   font-size: 13px;
 }
+
+/* ---- setup wizard ---- */
+
+.setup-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.setup-head h2 {
+  margin-bottom: 14px;
+}
+
+.pill.warn {
+  background: color-mix(in srgb, #e37400 18%, transparent);
+  color: #b06000;
+}
+
+@media (prefers-color-scheme: dark) {
+  .pill.warn {
+    color: #fdd663;
+  }
+}
+
+.steps {
+  margin: 0 0 16px;
+  padding-left: 20px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.steps li {
+  margin-bottom: 10px;
+}
+
+.steps strong {
+  color: var(--text);
+}
+
+.step-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.copy-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.copy-field .copy-label {
+  flex: none;
+  width: 100px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.copy-field code {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  font-size: 12px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+
+.copy-field button {
+  flex: none;
+  padding: 5px 10px;
+}
+
+.setup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.checks {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  border-top: 1px solid var(--border);
+}
+
+.check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.check-icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  margin-top: 1px;
+}
+
+.check-ok .check-icon {
+  background: var(--ok);
+}
+
+.check-warn .check-icon {
+  background: #e37400;
+}
+
+.check-fail .check-icon {
+  background: var(--danger);
+}
+
+.check-pending .check-icon {
+  background: var(--muted);
+}
+
+.check-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.check-body span {
+  color: var(--muted);
+  word-break: break-word;
+}
+
+.check-body a {
+  font-weight: 600;
+  margin-top: 2px;
+}

@@ -1,9 +1,10 @@
 import { StrictMode, useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderFilename } from '../shared/filename';
-import { send } from '../shared/messages';
+import { send, type AuthState } from '../shared/messages';
 import { PAPER_SIZES, type DriveFolder, type PaperSize, type PrintAction, type Settings } from '../shared/types';
 import { useAuth, useSettings } from './hooks';
+import { SetupSection } from './setup';
 import './styles.css';
 
 const ACTION_LABELS: Record<PrintAction, string> = {
@@ -50,14 +51,17 @@ function Toggle({
   );
 }
 
-function DriveSection({
+function FolderSection({
   settings,
   update,
+  auth,
+  signIn,
 }: {
   settings: Settings;
   update: (patch: Partial<Settings>) => Promise<void>;
+  auth: AuthState | null;
+  signIn: (broadScope?: boolean) => Promise<void>;
 }) {
-  const { auth, busy, error, signIn, signOut } = useAuth();
   const [folders, setFolders] = useState<DriveFolder[]>([]);
   const [newFolder, setNewFolder] = useState('');
   const [folderError, setFolderError] = useState<string | null>(null);
@@ -100,35 +104,28 @@ function DriveSection({
 
   if (!auth?.signedIn) {
     return (
-      <Section title="Google Drive">
+      <Section title="Destination folder">
         <p className="note" style={{ marginTop: 0 }}>
-          Connect the Google account that owns the folder your PDFs should land in. The extension
-          only ever sees files it creates itself.
+          Connect a Google account in Setup above, then pick a folder here. Until you do, the first
+          save creates a folder called &quot;Printed Pages&quot; in your Drive.
         </p>
-        <button className="primary" disabled={busy} onClick={() => void signIn()}>
-          {busy ? 'Connecting…' : 'Connect Google Drive'}
-        </button>
-        {error ? <p className="error">{error}</p> : null}
       </Section>
     );
   }
 
   return (
-    <Section title="Google Drive">
+    <Section title="Destination folder">
       <div className="row">
         <span className="label">
-          Connected
+          Signed in
           <span>{auth.email ?? 'Google account'}</span>
         </span>
-        <button onClick={() => void signOut()} disabled={busy}>
-          Disconnect
-        </button>
       </div>
 
       <div className="row">
         <span className="label" style={{ width: '100%' }}>
           <label className="field" htmlFor="folder">
-            Destination folder
+            Save PDFs into
           </label>
           <select
             id="folder"
@@ -422,6 +419,7 @@ function SiteRulesSection({
 
 function Options() {
   const { settings, update, error } = useSettings();
+  const { auth, busy, error: authError, signIn, signOut } = useAuth();
 
   if (!settings) {
     return (
@@ -439,6 +437,17 @@ function Options() {
           Ctrl+P saves the page as a PDF in Google Drive instead of opening the print dialog.
         </p>
       </header>
+
+      <SetupSection
+        settings={settings}
+        update={update}
+        auth={auth}
+        busy={busy}
+        authError={authError}
+        signIn={signIn}
+        signOut={signOut}
+      />
+      <FolderSection settings={settings} update={update} auth={auth} signIn={signIn} />
 
       <Section title="Interception">
         <Toggle
@@ -482,7 +491,6 @@ function Options() {
         </p>
       </Section>
 
-      <DriveSection settings={settings} update={update} />
       <FilenameSection settings={settings} update={update} />
       <PageSetupSection settings={settings} update={update} />
       <SiteRulesSection settings={settings} update={update} />

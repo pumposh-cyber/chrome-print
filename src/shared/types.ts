@@ -42,6 +42,13 @@ export interface Settings {
   defaultAction: PrintAction;
   siteRules: SiteRule[];
 
+  /**
+  * A Google OAuth client ID entered by the user. When set it overrides the one
+  * compiled into the manifest, so someone can point the extension at their own
+  * Google project without editing files or rebuilding.
+  */
+  oauthClientId: string | null;
+
   /** Drive folder that PDFs are written into. Null means "ask on first save". */
   folderId: string | null;
   folderName: string | null;
@@ -78,6 +85,7 @@ export const DEFAULT_SETTINGS: Settings = {
   interceptWindowPrint: true,
   defaultAction: 'auto',
   siteRules: [],
+  oauthClientId: null,
   folderId: null,
   folderName: null,
   filenameTemplate: '{title} - {date}',
